@@ -43,6 +43,7 @@ header h1 {
     margin-bottom: 0.5rem;
     background: linear-gradient(135deg, #a855f7, #6366f1);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -186,4 +187,106 @@ input:focus {
     text-align: center;
     color: var(--text-muted);
     padding: 2rem 0;
+}
+
+/* Calendar Section */
+.calendar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.calendar-header h2 {
+    margin-bottom: 0;
+    font-size: 1.25rem;
+}
+
+.cal-nav-btn {
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 600;
+}
+
+.cal-nav-btn:hover {
+    background-color: var(--border-color);
+    color: white;
+}
+
+.calendar-days-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+}
+
+.cal-day {
+    aspect-ratio: 1;
+    background-color: rgba(255,255,255,0.02);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end; /* aligning date numbers to top-right */
+    font-size: 0.85rem;
+    position: relative;
+    transition: background-color 0.2s;
+    overflow: hidden;
+}
+
+.cal-day.empty {
+    background-color: transparent;
+}
+
+.cal-day:not(.empty):hover {
+    background-color: rgba(255,255,255,0.05);
+}
+
+.cal-day.today {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.cal-day .day-num {
+    margin-bottom: auto;
+}
+
+.cal-birthday-badge {
+    background-color: var(--primary);
+    color: white;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.3rem;
+    border-radius: 4px;
+    width: 100%;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 0.15rem;
 }

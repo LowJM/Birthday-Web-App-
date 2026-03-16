@@ -2,58 +2,43 @@
 
 > A lightweight, client-side web application to track upcoming birthdays and receive native browser notifications.
 
+![HTML5](https://img.shields.io/badge/html5-%23E34F26.svg?style=for-the-badge&logo=html5&logoColor=white) 
+![CSS3](https://img.shields.io/badge/css3-%231572B6.svg?style=for-the-badge&logo=css3&logoColor=white) 
+![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)
+
 ## Why This Exists
 
-Missing a friend or family member's birthday is a terrible feeling. This application provides a simple, fast, and privacy-focused way to keep track of birthdays without requiring user accounts or sending data to external servers. Everything lives directly in your browser.
+Missing a friend or family member's birthday is a terrible feeling, but uploading your personal contacts to a third-party server just for reminders is a privacy risk. This application solves the problem by providing a fast, offline-capable way to track birthdays directly in your browser using local storage, without requiring user accounts or sending data externally.
 
 ## Quick Start
-
-The easiest way to run the Birthday Scheduler is by serving it locally using a standard HTTP server.
 
 ```bash
 # Clone the repository and navigate to the directory
 cd "Birthday App"
 
-# Start a local static server (e.g., using Python 3)
+# Start a local static server
 python -m http.server 3000
 ```
 
 Then visit `http://localhost:3000` in your web browser.
 
-## Technical Architecture
+## Installation
 
-This project is designed specifically to be as dependency-free as possible, ensuring long-term maintainability and instant load times.
+**Prerequisites**: A modern web browser (Chrome, Edge, Firefox, Safari) and a local development server (e.g., Python 3, Node.js `http-server`, or a VS Code Live Server extension). No `npm install` is required.
 
-### Core Technologies
-
-- **HTML5 & CSS3**: Vanilla HTML structuring and modern CSS (Flexbox, CSS variables, transitions) without frameworks or preprocessors.
-- **Vanilla JavaScript (ES6+)**: Handles all presentation logic and state management without the overhead of React, Vue, or Angular. Let the DOM be your state model.
-
-### Data Persistence
-
-Data is stored entirely on the client side using the browser's native **LocalStorage API**.
-
-- `birthdays`: An array of objects storing the `id`, `name`, and `date` for each entry. 
-- `notificationsNotifiedToday`: A mapping object that prevents duplicate notifications from firing repeatedly on the same day for the same birthday.
-
-No backend database or authentication is required. Data remains persistent as long as the user doesn't clear their browser's local storage data for the domain.
-
-### Alerts and Notifications
-
-Alerts are powered by the **Web Notifications API**, which prompts native, system-level notifications on the user's device (desktop or mobile).
-
-1. **Permission Request**: When a user adds their first birthday, the app proactively calls `Notification.requestPermission()` to securely request permission.
-2. **Evaluation Logic**: Every time the app loads (or the user interacts with the UI and triggers a re-render), the `calculateNextBirthday` function evaluates if any birthday matches the current date.
-3. **Dispatch**: If a birthday falls on today's date, the app uses `new Notification()` to trigger a native pop-up containing a custom icon and message. The record is then logged in `notificationsNotifiedToday` to avoid endless spam on subsequent reloads.
+```bash
+# Using Node.js http-server instead of Python
+npx http-server -p 3000
+```
 
 ## Usage
 
 ### Basic Example
 
-Once running, adding a new entry is as simple as populating the HTML form:
+Open the app in your browser and use the UI to add a birthday. Alternatively, you can add data programmatically via the browser console:
 
 ```javascript
-// Adding a birthday programmatically (mock example)
+// Adding a birthday programmatically
 const newBirthday = {
     id: Date.now().toString(),
     name: "Jane Doe",
@@ -63,11 +48,52 @@ const newBirthday = {
 const birthdays = JSON.parse(localStorage.getItem('birthdays')) || [];
 birthdays.push(newBirthday);
 localStorage.setItem('birthdays', JSON.stringify(birthdays));
+
+// Refresh the page to see the changes
+location.reload();
 ```
+
+### Configuration
+
+All configuration is handled implicitly via browser native APIs.
+
+| LocalStorage Key | Type | Description |
+|--------|------|-------------|
+| `birthdays` | `array` | Stores the list of `id`, `name`, and `date` objects. |
+| `notificationsNotifiedToday` | `object` | Maps `{id}-{date}` keys to booleans to prevent duplicate notifications. |
+
+### Advanced Usage
+
+If you need to calculate the days remaining until a specific birthday within your own script:
+
+```javascript
+function calculateNextBirthday(dateString) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const bdate = new Date(dateString);
+    let nextBdate = new Date(today.getFullYear(), bdate.getUTCMonth(), bdate.getUTCDate());
+
+    if (nextBdate < today) {
+        nextBdate.setFullYear(today.getFullYear() + 1);
+    }
+
+    const diffTime = nextBdate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
+}
+```
+
+## API Reference
+
+As this is a vanilla frontend application with no backend, all interactions are through the DOM and the native LocalStorage and Notification APIs. See `app.js` for the core presentation logic. 
+
+For end-user instructions, please see [USER_GUIDE.md](USER_GUIDE.md).
 
 ## Contributing
 
-Because this project relies entirely on client-side vanilla web technologies, anyone can open `index.html` in their browser or run a lightweight local server to start hacking. See `app.js` for the core application logic.
+Because this project relies entirely on client-side vanilla web technologies, anyone can open `index.html` in their browser or run a lightweight local server to start hacking.
 
 ## License
 

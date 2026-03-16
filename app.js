@@ -4,6 +4,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateInput = document.getElementById('birth-date');
     const listContainer = document.getElementById('birthday-list');
 
+    const prevMonthBtn = document.getElementById('prev-month-btn');
+    const nextMonthBtn = document.getElementById('next-month-btn');
+    const calendarMonthYear = document.getElementById('calendar-month-year');
+    const calendarGrid = document.getElementById('calendar-grid');
+
+    const currentDate = new Date();
+    let currentCalendarMonth = currentDate.getMonth();
+    let currentCalendarYear = currentDate.getFullYear();
+
     let birthdays = JSON.parse(localStorage.getItem('birthdays')) || [];
     let notificationsNotifiedToday = JSON.parse(localStorage.getItem('notificationsNotifiedToday')) || {};
 
@@ -125,6 +134,84 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveBirthdays();
                 renderBirthdays();
             });
+        });
+        
+        renderCalendar();
+    }
+
+    function renderCalendar() {
+        if (!calendarGrid) return;
+        
+        calendarGrid.innerHTML = '';
+        
+        const firstDay = new Date(currentCalendarYear, currentCalendarMonth, 1).getDay();
+        const daysInMonth = new Date(currentCalendarYear, currentCalendarMonth + 1, 0).getDate();
+        
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        if (calendarMonthYear) {
+            calendarMonthYear.textContent = `${monthNames[currentCalendarMonth]} ${currentCalendarYear}`;
+        }
+        
+        const today = new Date();
+        const isCurrentMonth = today.getMonth() === currentCalendarMonth && today.getFullYear() === currentCalendarYear;
+
+        // Add empty cells for preceding days
+        for (let i = 0; i < firstDay; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.className = 'cal-day empty';
+            calendarGrid.appendChild(emptyCell);
+        }
+
+        // Add days
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dayCell = document.createElement('div');
+            dayCell.className = `cal-day ${isCurrentMonth && today.getDate() === i ? 'today' : ''}`;
+            
+            dayCell.innerHTML = `<div class="day-num">${i}</div>`;
+            
+            // Find birthdays for this day
+            const dayBirthdays = birthdays.filter(b => {
+                if (!b.date) return false;
+                const parts = b.date.split('-');
+                if (parts.length === 3) {
+                    const bMonth = parseInt(parts[1], 10) - 1;
+                    const bDay = parseInt(parts[2], 10);
+                    return bMonth === currentCalendarMonth && bDay === i;
+                }
+                return false;
+            });
+
+            dayBirthdays.forEach(b => {
+                const badge = document.createElement('div');
+                badge.className = 'cal-birthday-badge';
+                badge.textContent = b.name;
+                badge.title = b.name;
+                dayCell.appendChild(badge);
+            });
+
+            calendarGrid.appendChild(dayCell);
+        }
+    }
+
+    if (prevMonthBtn) {
+        prevMonthBtn.addEventListener('click', () => {
+            currentCalendarMonth--;
+            if (currentCalendarMonth < 0) {
+                currentCalendarMonth = 11;
+                currentCalendarYear--;
+            }
+            renderCalendar();
+        });
+    }
+
+    if (nextMonthBtn) {
+        nextMonthBtn.addEventListener('click', () => {
+            currentCalendarMonth++;
+            if (currentCalendarMonth > 11) {
+                currentCalendarMonth = 0;
+                currentCalendarYear++;
+            }
+            renderCalendar();
         });
     }
 

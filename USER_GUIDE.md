@@ -1,51 +1,67 @@
-# Birthday Scheduler: User Guide
+# Tutorial: Managing Birthdays in 5 Minutes
 
-Welcome to the Birthday Scheduler! This simple application helps you keep track of all the special dates in your life and sends you friendly reminders so you never forget to wish someone a happy birthday.
+**What you'll build**: A personalized local dashboard of upcoming birthdays that sends native browser notifications on the day of the event.
 
-Here is a step-by-step guide to get you up and running.
+**What you'll learn**:
+- How to launch a local server for the app
+- How to add and manage birthdays
+- How to enable and receive native browser notifications
 
----
-
-## 1. Launching the App
-
-To open the app, you just need to access the local web server. 
-
-1. Ensure your local server is running (it typically runs on port 3000 if using standard settings).
-2. Open your preferred web browser (e.g., Chrome, Edge, Safari, or Firefox).
-3. In the address bar at the top, type `http://localhost:3000` and hit **Enter**.
-4. The Birthday Scheduler dashboard will load immediately.
-
-## 2. Adding a New Birthday
-
-Adding a friend or family member requires just a few clicks:
-
-1. Look for the **"Add New Birthday"** section on the main screen.
-2. Click on the **Person's Name** field and type the name of the person (e.g., "Jane Doe").
-3. Click on the **Birthdate** field. Depending on your browser, a calendar picker will pop up. Select their date of birth. (You don't need to worry about the year, just selecting an accurate month and day is fine, though full dates work perfectly).
-4. Click the purple **Save Birthday** button.
-
-The birthday will immediately appear in the **"Upcoming Birthdays"** list below! This list automatically sorts everyone so the birthdays happening closest to today appear at the very top.
-
-## 3. Granting Notification Permissions
-
-The best feature of this app is that it can send you reminders! However, for privacy reasons, your web browser requires you to grant the app permission to send these alerts.
-
-1. The very first time you hit **Save Birthday**, your browser will show a prompt near the top of the window (usually near the address bar).
-2. The prompt will say something like: *"localhost:3000 wants to show notifications"*.
-3. Click **Allow**.
-
-*Note: If you accidentally click "Block", the app won't be able to remind you. You'll need to go into your browser's site settings to manually change the permission to "Allow".*
-
-## 4. What to Expect from Reminders
-
-Once permissions are granted, you don't need to do anything else. The app handles the rest!
-
-- **When it happens:** If you open or refresh the app and it happens to be someone's birthday on that exact day, the reminder will trigger.
-- **What it looks like:** You will receive a standard, system-level notification block on your computer screen (usually sliding in from the bottom-right on Windows, or top-right on Mac). 
-- **The message:** It will display a small cake icon and a cheerful message: *"Birthday Reminder! 🎉 It's Jane Doe's birthday today! Don't forget to wish them well!"*
-
-The app is smart enough to remember that it already reminded you today, so it won't spam you if you repeatedly refresh or revisit the page.
+**Prerequisites**:
+- [ ] A modern web browser (Google Chrome, Firefox, Safari, or Microsoft Edge)
+- [ ] A local static file server (like `python -m http.server`) installed on your computer
 
 ---
 
-That's it! Enjoy using the Birthday Scheduler.
+## Step 1: Launch Your App
+
+First, you need to serve the application files via a local HTTP server so that the browser can fully utilize the native Notifications API. 
+
+Open your terminal or command prompt, navigate to the folder containing the app, and run one of the following commands:
+
+```bash
+# If you have Python installed:
+python -m http.server 3000
+
+# Alternative: If you have Node.js installed:
+npx http-server -p 3000
+```
+
+Once the server is running, open your web browser and navigate to `http://localhost:3000`. You should see the empty Birthday Scheduler dashboard.
+
+> **Tip**: If you see an error about port `3000` already being in use, try changing the number to `8080` (e.g., `python -m http.server 8080`).
+
+## Step 2: Add a Birthday
+
+Let's input your first birthday to see how the sorting works.
+
+1. Locate the **"Add New Birthday"** section on the main screen.
+2. Type a name into the **Person's Name** field (e.g., "Jane Doe").
+3. Click the **Birthdate** field to open your browser's calendar picker, and select their exact date of birth. 
+4. Click the **Save Birthday** button.
+
+The birthday will immediately appear in the **"Upcoming Birthdays"** list below. As you add more people, this list automatically sorts itself so the birthdays happening closest to today appear at the very top.
+
+## Step 3: Grant Notification Permissions
+
+The best feature of this app is its ability to send you automatic reminders. Once you click "Save Birthday" for the first time, your browser will prompt you for permission.
+
+1. Look near your web browser's address bar for a popup that says something like: *"localhost:3000 wants to show notifications"*.
+2. Click **Allow**.
+
+*Note: If you click "Block", the app won't be able to remind you. You'll need to go into your browser's site settings to manually change the permission to "Allow".*
+
+## Step 4: What You Built
+
+Congratulations! You have set up a localized, private birthday tracker. 
+
+Here is what will happen automatically from now on:
+- **When it happens**: Whenever you open or keep this app open on someone's exact birthday, a reminder will trigger.
+- **What it looks like**: You'll receive a system-level notification block on your screen (usually in the bottom-right on Windows or top-right on Mac).
+- **The experience**: It displays a small cake icon and a cheerful message: *"Birthday Reminder! 🎉 It's Jane Doe's birthday today!"*
+
+The app is smart enough to remember that it already reminded you today, so it won't spam you if you repeatedly refresh the page.
+
+## Next Steps
+
+- [Reference: Read the developer documentation](README.md)
