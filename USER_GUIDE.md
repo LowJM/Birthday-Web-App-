@@ -1,67 +1,50 @@
-# Tutorial: Managing Birthdays in 5 Minutes
+# User Guide: Mastering the Birthday App
 
-**What you'll build**: A personalized local dashboard of upcoming birthdays that sends native browser notifications on the day of the event.
-
-**What you'll learn**:
-- How to launch a local server for the app
-- How to add and manage birthdays
-- How to enable and receive native browser notifications
-
-**Prerequisites**:
-- [ ] A modern web browser (Google Chrome, Firefox, Safari, or Microsoft Edge)
-- [ ] A local static file server (like `python -m http.server`) installed on your computer
+Welcome! This guide helps you navigate the features of your new Birthday Scheduler, from adding your first contact to syncing your data across devices.
 
 ---
 
-## Step 1: Launch Your App
+## 1. Getting Started (Guest Mode)
 
-First, you need to serve the application files via a local HTTP server so that the browser can fully utilize the native Notifications API. 
+When you first open the app, you are automatically signed in as a **Guest**. 
+- You can start adding birthdays immediately.
+- Your data is stored securely in the cloud under a temporary ID.
+- **Tip**: To ensure you never lose your data, we recommend "Linking" your account (see Section 3).
 
-Open your terminal or command prompt, navigate to the folder containing the app, and run one of the following commands:
+## 2. Managing Birthdays
 
-```bash
-# If you have Python installed:
-python -m http.server 3000
+### Adding a Birthday
+1. Click the **Add New** button in the header.
+2. Enter the person's name and select their birthdate.
+3. Click **Save**.
 
-# Alternative: If you have Node.js installed:
-npx http-server -p 3000
-```
+### The Dashboard
+- **Upcoming List**: Birthdays are automatically sorted so the closest ones appear at the top.
+- **Today's Reminder**: If someone has a birthday today, a special highlight card will appear at the top.
+- **Calendar**: Scroll down to see the full month view. Dates with birthdays are marked with a purple dot.
 
-Once the server is running, open your web browser and navigate to `http://localhost:3000`. You should see the empty Birthday Scheduler dashboard.
+## 3. Linking Your Account (Cloud Sync)
 
-> **Tip**: If you see an error about port `3000` already being in use, try changing the number to `8080` (e.g., `python -m http.server 8080`).
+If you want to access your birthdays on another phone or browser, you must link an email address:
 
-## Step 2: Add a Birthday
+1. Click **Link email account** in the footer.
+2. Enter your email and a password.
+3. You will receive a confirmation email. **You must open this link on your mobile device** to verify the account.
 
-Let's input your first birthday to see how the sorting works.
+### Conflict Resolution (The Merge Choice)
+If you try to link an email that you have used before, the app will ask you a question:
+- **Merge**: Take the birthdays you just added as a guest and add them to your existing account.
+- **Discard**: Ignore your current guest birthdays and just log in to your old account.
 
-1. Locate the **"Add New Birthday"** section on the main screen.
-2. Type a name into the **Person's Name** field (e.g., "Jane Doe").
-3. Click the **Birthdate** field to open your browser's calendar picker, and select their exact date of birth. 
-4. Click the **Save Birthday** button.
+## 4. Native Notifications
 
-The birthday will immediately appear in the **"Upcoming Birthdays"** list below. As you add more people, this list automatically sorts itself so the birthdays happening closest to today appear at the very top.
+To receive reminders on your phone:
+1. When prompted, click **Allow** for notification permissions.
+2. The app will send you a reminder on the morning of a saved birthday.
+3. **Note**: If you don't receive notifications, check your phone's system settings to ensure "Birthday App" has alert permissions enabled.
 
-## Step 3: Grant Notification Permissions
+## 5. Switching Accounts
 
-The best feature of this app is its ability to send you automatic reminders. Once you click "Save Birthday" for the first time, your browser will prompt you for permission.
-
-1. Look near your web browser's address bar for a popup that says something like: *"localhost:3000 wants to show notifications"*.
-2. Click **Allow**.
-
-*Note: If you click "Block", the app won't be able to remind you. You'll need to go into your browser's site settings to manually change the permission to "Allow".*
-
-## Step 4: What You Built
-
-Congratulations! You have set up a localized, private birthday tracker. 
-
-Here is what will happen automatically from now on:
-- **When it happens**: Whenever you open or keep this app open on someone's exact birthday, a reminder will trigger.
-- **What it looks like**: You'll receive a system-level notification block on your screen (usually in the bottom-right on Windows or top-right on Mac).
-- **The experience**: It displays a small cake icon and a cheerful message: *"Birthday Reminder! 🎉 It's Jane Doe's birthday today!"*
-
-The app is smart enough to remember that it already reminded you today, so it won't spam you if you repeatedly refresh the page.
-
-## Next Steps
-
-- [Reference: Read the developer documentation](README.md)
+If you want to log out or switch to a different email:
+1. Click the **Switch email account** or **Logout** button in the footer.
+2. After logging out, the app will automatically return to **Guest Mode** so you can continue using it immediately.

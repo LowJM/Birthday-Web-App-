@@ -1,0 +1,32 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-bg-color text-text-main font-sans min-h-screen antialiased;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.cal-day {
+  @apply min-h-[40px] bg-white/5 border border-transparent rounded-lg p-0.5 flex flex-col items-center justify-start text-[10px] transition-colors;
+}
+
+.cal-day:not(.empty):hover {
+  @apply bg-white/10;
+}
+
+.cal-day.today {
+  @apply border-accent text-accent font-bold bg-accent/5;
+}
+
+.birthday-dot {
+  @apply w-1.5 h-1.5 rounded-full bg-primary mt-0.5 shadow-sm;
+}
