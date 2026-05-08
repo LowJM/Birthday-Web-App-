@@ -38,28 +38,46 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"link" | "switch">("link");
+  const [authMode, setAuthMode] = useState<"link" | "switch" | "reset" | "update_password">("link");
   const [showConflictResolution, setShowConflictResolution] = useState(false);
   
   // Auth state
   useEffect(() => {
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        const { data } = await supabase.auth.signInAnonymously();
-        if (data.user) setUser(data.user);
-      } else {
-        setUser(session.user);
+      
+      if (session) {
+        // Validate the session token with the server
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          // The user was likely deleted from the Supabase dashboard but the JWT remains on the device.
+          // Force sign out to clear the stale local session.
+          await supabase.auth.signOut();
+        } else {
+          setUser(user);
+          setLoading(false);
+          return;
+        }
       }
+
+      // If no valid session exists, create a new anonymous guest session
+      const { data } = await supabase.auth.signInAnonymously();
+      if (data.user) setUser(data.user);
+      
       setLoading(false);
     };
 
     initAuth();
     
     // Listen for auth changes (including sign-out)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthMode("update_password");
+        setIsAuthModalOpen(true);
+      }
+
       // Zero-downtime Guest Recovery:
       // If the user logs out (session becomes null), instantly restore guest access.
       if (!session) {
@@ -147,7 +165,17 @@ export default function App() {
       const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const isToday = today.getMonth() === bMonth && today.getDate() === bDay;
 
-      return { ...b, daysLeft, isToday, nextDate };
+      // Calculate when to actually trigger the notification
+      let scheduleDate = new Date(nextDate);
+      scheduleDate.setHours(9, 0, 0, 0); // 9:00 AM local time
+      
+      // If today is their birthday and 9 AM has already passed, schedule for next year
+      // This prevents the bug where opening the app fires a past notification immediately
+      if (scheduleDate.getTime() <= Date.now()) {
+        scheduleDate.setFullYear(scheduleDate.getFullYear() + 1);
+      }
+
+      return { ...b, daysLeft, isToday, nextDate, scheduleDate };
     }).sort((a, b) => a.daysLeft - b.daysLeft);
   }, [birthdays]);
 
@@ -161,7 +189,7 @@ export default function App() {
     if (enrichedBirthdays.length === 0) return;
 
     // Avoid redundant scheduling if the birthdays haven't changed
-    const currentHash = JSON.stringify(enrichedBirthdays.map(b => ({ id: b.id, next: b.nextDate.getTime() })));
+    const currentHash = JSON.stringify(enrichedBirthdays.map(b => ({ id: b.id, next: b.scheduleDate.getTime() })));
     if (currentHash === lastScheduledHash.current) return;
     lastScheduledHash.current = currentHash;
 
@@ -175,7 +203,7 @@ export default function App() {
           title: "Birthday Reminder! 🎉",
           body: `It's ${b.name}'s birthday today!`,
           id: parseInt(b.id.slice(-8), 16) || Math.floor(Math.random() * 100000), // convert uuid suffix to int
-          schedule: { at: b.nextDate },
+          schedule: { at: b.scheduleDate, allowWhileIdle: true },
           sound: "res://raw/notification_sound", // optional
           actionTypeId: "",
           extra: null
@@ -254,6 +282,35 @@ export default function App() {
 
   const handleAuthAction = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (authMode === "reset") {
+      if (!authEmail) return;
+      const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
+        redirectTo: "http://localhost:3000" // Web testing default
+      });
+      if (error) {
+        addToast("Reset failed: " + error.message, "error");
+      } else {
+        addToast("Password reset link sent! Check your email.", "success");
+        setIsAuthModalOpen(false);
+      }
+      return;
+    }
+
+    if (authMode === "update_password") {
+      if (!authPassword) return;
+      const { error } = await supabase.auth.updateUser({ password: authPassword });
+      if (error) {
+        addToast("Update failed: " + error.message, "error");
+      } else {
+        addToast("Password updated successfully!", "success");
+        setAuthPassword("");
+        setIsAuthModalOpen(false);
+        setAuthMode("switch"); // reset mode
+      }
+      return;
+    }
+
     if (!authEmail || !authPassword) return;
 
     if (authMode === "link") {
@@ -597,6 +654,7 @@ export default function App() {
         authPassword={authPassword}
         setAuthPassword={setAuthPassword}
         authMode={authMode}
+        setAuthMode={setAuthMode}
         handleAuthAction={handleAuthAction}
         showConflictResolution={showConflictResolution}
         setShowConflictResolution={setShowConflictResolution}

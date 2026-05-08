@@ -8,7 +8,8 @@ interface AuthModalProps {
   setAuthEmail: (email: string) => void;
   authPassword: string;
   setAuthPassword: (pass: string) => void;
-  authMode: "link" | "switch";
+  authMode: "link" | "switch" | "reset" | "update_password";
+  setAuthMode: (mode: "link" | "switch" | "reset" | "update_password") => void;
   handleAuthAction: (e: React.FormEvent) => void;
   showConflictResolution: boolean;
   setShowConflictResolution: (show: boolean) => void;
@@ -24,6 +25,7 @@ export default function AuthModal({
   authPassword,
   setAuthPassword,
   authMode,
+  setAuthMode,
   handleAuthAction,
   showConflictResolution,
   setShowConflictResolution,
@@ -50,37 +52,72 @@ export default function AuthModal({
             {!showConflictResolution ? (
               <>
                 <h2 className="text-2xl font-bold mb-2">
-                  {authMode === "link" ? "Link Email Account" : "Switch Account"}
+                  {authMode === "link" ? "Link Email Account" : authMode === "switch" ? "Switch Account" : authMode === "reset" ? "Reset Password" : "Set New Password"}
                 </h2>
                 <p className="text-sm text-gray-400 mb-6">
                   {authMode === "link" 
                     ? "Connect an email to secure your data and access it from any device."
-                    : "Sign in with an existing email to fetch your saved birthdays."}
+                    : authMode === "switch"
+                    ? "Sign in with an existing email to fetch your saved birthdays."
+                    : authMode === "reset"
+                    ? "Enter your email to receive a password reset link."
+                    : "Enter a new password for your account."}
                 </p>
                 
                 <form onSubmit={handleAuthAction} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-400">Email Address</label>
-                    <input 
-                      required
-                      type="email" 
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full bg-[#0F0F1E] border border-white/10 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-400">Password</label>
-                    <input 
-                      required
-                      type="password" 
-                      value={authPassword}
-                      onChange={(e) => setAuthPassword(e.target.value)}
-                      placeholder="Min 6 characters"
-                      className="w-full bg-[#0F0F1E] border border-white/10 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-white"
-                    />
-                  </div>
+                  {authMode !== "update_password" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-400">Email Address</label>
+                      <input 
+                        required
+                        type="email" 
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full bg-[#0F0F1E] border border-white/10 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-white"
+                      />
+                    </div>
+                  )}
+                  {authMode !== "reset" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-400">
+                        {authMode === "update_password" ? "New Password" : "Password"}
+                      </label>
+                      <input 
+                        required
+                        type="password" 
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        placeholder="Min 6 characters"
+                        className="w-full bg-[#0F0F1E] border border-white/10 rounded-xl px-4 py-3 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-white"
+                      />
+                    </div>
+                  )}
+
+                  {(authMode === "link" || authMode === "switch") && (
+                    <div className="text-right">
+                      <button 
+                        type="button" 
+                        onClick={() => setAuthMode("reset")} 
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                  )}
+
+                  {authMode === "reset" && (
+                    <div className="text-right">
+                      <button 
+                        type="button" 
+                        onClick={() => setAuthMode("link")} 
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        Back to Login
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex gap-3 pt-4">
                     <button 
                       type="button"
@@ -93,7 +130,7 @@ export default function AuthModal({
                       type="submit"
                       className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20"
                     >
-                      {authMode === "link" ? "Link Account" : "Sign In"}
+                      {authMode === "link" ? "Link Account" : authMode === "switch" ? "Sign In" : authMode === "reset" ? "Send Link" : "Update Password"}
                     </button>
                   </div>
                 </form>

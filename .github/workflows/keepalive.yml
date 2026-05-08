@@ -1,0 +1,30 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Runs at 00:00 on Monday and Thursday
+    - cron: '0 0 * * 1,4'
+  workflow_dispatch: # Allows you to run it manually from the Actions tab
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "Pinging Supabase to prevent project from pausing..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/birthdays?limit=1")
+          
+          echo "Supabase responded with HTTP Status: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "Successfully pinged Supabase!"
+          else
+            echo "Ping completed, but received non-200 status. (This still counts as activity!)"
+          fi
