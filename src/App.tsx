@@ -1,7 +1,5 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase, type Birthday } from "./lib/supabase";
-import { LocalNotifications } from "@capacitor/local-notifications";
-import { App as CapApp } from "@capacitor/app";
 import Toast, { type ToastMessage } from "./components/Toast";
 import { 
   Plus, 
@@ -24,7 +22,6 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [loading, setLoading] = useState(true);
-  const lastScheduledHash = useRef<string>("");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = (message: string, type: "success" | "error" | "info" = "success") => {
@@ -35,6 +32,7 @@ export default function App() {
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -47,11 +45,8 @@ export default function App() {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // Validate the session token with the server
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error || !user) {
-          // The user was likely deleted from the Supabase dashboard but the JWT remains on the device.
-          // Force sign out to clear the stale local session.
           await supabase.auth.signOut();
         } else {
           setUser(user);
@@ -60,16 +55,13 @@ export default function App() {
         }
       }
 
-      // If no valid session exists, create a new anonymous guest session
       const { data } = await supabase.auth.signInAnonymously();
       if (data.user) setUser(data.user);
-      
       setLoading(false);
     };
 
     initAuth();
     
-    // Listen for auth changes (including sign-out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       
@@ -78,8 +70,6 @@ export default function App() {
         setIsAuthModalOpen(true);
       }
 
-      // Zero-downtime Guest Recovery:
-      // If the user logs out (session becomes null), instantly restore guest access.
       if (!session) {
         const { data } = await supabase.auth.signInAnonymously();
         if (data.user) setUser(data.user);
@@ -89,12 +79,10 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle Deep Links (Email Confirmation)
+  // Handle deep links via browser navigation
   useEffect(() => {
-    const handleAction = async (event: { url: string }) => {
-      const url = new URL(event.url);
-      
-      // Check both hash (#) and search (?) for tokens
+    const handleAuthLink = async () => {
+      const url = new URL(window.location.href);
       const hashParams = new URLSearchParams(url.hash.substring(1));
       const searchParams = new URLSearchParams(url.search);
       
@@ -117,16 +105,7 @@ export default function App() {
       }
     };
 
-    const setupListener = async () => {
-      const handle = await CapApp.addListener("appUrlOpen", handleAction);
-      return handle;
-    };
-
-    const listenerPromise = setupListener();
-
-    return () => {
-      listenerPromise.then(handle => handle.remove());
-    };
+    handleAuthLink();
   }, []);
 
   // Fetch birthdays
@@ -144,19 +123,17 @@ export default function App() {
     fetchBirthdays();
   }, [user]);
 
-  // Enriched birthdays logic
+  // Enriched birthdays
   const enrichedBirthdays = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     return birthdays.map(b => {
-      // Manual parsing to avoid timezone-shifting (ISO 8601 YYYY-MM-DD)
       const parts = b.birth_date.split('-').map(Number);
-      const bMonth = parts[1] - 1; // 0-indexed
+      const bMonth = parts[1] - 1;
       const bDay = parts[2];
       
       let nextDate = new Date(today.getFullYear(), bMonth, bDay);
-      
       if (nextDate < today) {
         nextDate.setFullYear(today.getFullYear() + 1);
       }
@@ -165,57 +142,9 @@ export default function App() {
       const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const isToday = today.getMonth() === bMonth && today.getDate() === bDay;
 
-      // Calculate when to actually trigger the notification
-      let scheduleDate = new Date(nextDate);
-      scheduleDate.setHours(9, 0, 0, 0); // 9:00 AM local time
-      
-      // If today is their birthday and 9 AM has already passed, schedule for next year
-      // This prevents the bug where opening the app fires a past notification immediately
-      if (scheduleDate.getTime() <= Date.now()) {
-        scheduleDate.setFullYear(scheduleDate.getFullYear() + 1);
-      }
-
-      return { ...b, daysLeft, isToday, nextDate, scheduleDate };
+      return { ...b, daysLeft, isToday, nextDate };
     }).sort((a, b) => a.daysLeft - b.daysLeft);
   }, [birthdays]);
-
-  // Request notification permissions
-  useEffect(() => {
-    LocalNotifications.requestPermissions();
-  }, []);
-
-  // Sync notifications with birthdays
-  useEffect(() => {
-    if (enrichedBirthdays.length === 0) return;
-
-    // Avoid redundant scheduling if the birthdays haven't changed
-    const currentHash = JSON.stringify(enrichedBirthdays.map(b => ({ id: b.id, next: b.scheduleDate.getTime() })));
-    if (currentHash === lastScheduledHash.current) return;
-    lastScheduledHash.current = currentHash;
-
-    const scheduleNotifications = async () => {
-      await LocalNotifications.cancel({ notifications: await (await LocalNotifications.getPending()).notifications });
-      
-      const notifications = enrichedBirthdays
-        .filter(b => b.daysLeft >= 0)
-        .slice(0, 50) // Capacitor limits
-        .map(b => ({
-          title: "Birthday Reminder! 🎉",
-          body: `It's ${b.name}'s birthday today!`,
-          id: parseInt(b.id.slice(-8), 16) || Math.floor(Math.random() * 100000), // convert uuid suffix to int
-          schedule: { at: b.scheduleDate, allowWhileIdle: true },
-          sound: "res://raw/notification_sound", // optional
-          actionTypeId: "",
-          extra: null
-        }));
-
-      if (notifications.length > 0) {
-        await LocalNotifications.schedule({ notifications });
-      }
-    };
-
-    scheduleNotifications();
-  }, [enrichedBirthdays]);
 
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState("");
@@ -229,7 +158,7 @@ export default function App() {
       return;
     }
     if (name.length > 50) {
-      addToast("Name is too long (max 50 chars)", "error");
+      addToast("Name too long (max 50 chars)", "error");
       return;
     }
     if (!newDate || !user) return;
@@ -240,7 +169,6 @@ export default function App() {
       .select();
 
     if (error) {
-      console.error("Save Error:", error);
       addToast("Error saving: " + error.message, "error");
       return;
     }
@@ -273,7 +201,6 @@ export default function App() {
   const year = currentDate.getFullYear();
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
 
@@ -285,13 +212,15 @@ export default function App() {
     
     if (authMode === "reset") {
       if (!authEmail) return;
+      setLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
-        redirectTo: "http://localhost:3000" // Web testing default
+        redirectTo: "com.birthdayapp://reset-password"
       });
+      setLoading(false);
       if (error) {
         addToast("Reset failed: " + error.message, "error");
       } else {
-        addToast("Password reset link sent! Check your email.", "success");
+        addToast("Password reset link sent! Check email.", "success");
         setIsAuthModalOpen(false);
       }
       return;
@@ -299,14 +228,16 @@ export default function App() {
 
     if (authMode === "update_password") {
       if (!authPassword) return;
+      setLoading(true);
       const { error } = await supabase.auth.updateUser({ password: authPassword });
+      setLoading(false);
       if (error) {
         addToast("Update failed: " + error.message, "error");
       } else {
-        addToast("Password updated successfully!", "success");
+        addToast("Password updated!", "success");
         setAuthPassword("");
         setIsAuthModalOpen(false);
-        setAuthMode("switch"); // reset mode
+        setAuthMode("switch");
       }
       return;
     }
@@ -321,7 +252,6 @@ export default function App() {
       if (error) {
         const isRegisteredError = 
           error.message.toLowerCase().includes("already registered") || 
-          error.message.toLowerCase().includes("already been registered") ||
           error.message.toLowerCase().includes("email exists") ||
           error.status === 422;
 
@@ -329,7 +259,6 @@ export default function App() {
           if (birthdays.length > 0) {
             setShowConflictResolution(true);
           } else {
-            // No data to merge, just sign in
             const { error: signInError } = await supabase.auth.signInWithPassword({
               email: authEmail,
               password: authPassword
@@ -337,7 +266,7 @@ export default function App() {
             if (signInError) {
               addToast("Sign in failed: " + signInError.message, "error");
             } else {
-              setAuthPassword(""); // Security: Clear password
+              setAuthPassword("");
               addToast("Welcome back!", "success");
               setIsAuthModalOpen(false);
             }
@@ -346,8 +275,8 @@ export default function App() {
           addToast("Linking failed: " + error.message, "error");
         }
       } else {
-        setAuthPassword(""); // Security: Clear password
-        addToast("Link initiated! Check your email.", "info");
+        setAuthPassword("");
+        addToast("Link initiated! Check email.", "info");
         setIsAuthModalOpen(false);
       }
     } else {
@@ -355,7 +284,7 @@ export default function App() {
       if (error) {
         addToast("Sign in failed: " + error.message, "error");
       } else {
-        setAuthPassword(""); // Security: Clear password
+        setAuthPassword("");
         addToast("Welcome back!", "success");
         setIsAuthModalOpen(false);
       }
@@ -363,7 +292,6 @@ export default function App() {
   };
 
   const handleResolutionChoice = async (choice: 'merge' | 'discard') => {
-    // Merge Guard: If there's no data to merge, bypass the process but log in
     if (birthdays.length === 0) {
       setLoading(true);
       const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -384,11 +312,8 @@ export default function App() {
     }
 
     setLoading(true);
-    
-    // 1. Store guest data if merging
     const guestData = choice === 'merge' ? [...birthdays] : [];
     
-    // 2. Sign in to existing account
     const { data: { user: newUser }, error: signInError } = await supabase.auth.signInWithPassword({
       email: authEmail,
       password: authPassword
@@ -397,11 +322,9 @@ export default function App() {
     if (signInError) {
       addToast("Login failed: " + signInError.message, "error");
       setLoading(false);
-      // We DON'T close the modal here so the user can try again
       return;
     }
 
-    // 3. If merge, upload guest data to new user ID
     if (choice === 'merge' && guestData.length > 0 && newUser) {
       addToast("Merging your birthdays...", "info");
       const birthdaysToInsert = guestData.map(b => ({
@@ -412,18 +335,17 @@ export default function App() {
 
       const { error: mergeError } = await supabase.from('birthdays').insert(birthdaysToInsert);
       if (mergeError) {
-        addToast("Merge partial failure: " + mergeError.message, "error");
-        // We stay in the modal if the merge failed so user can see/retry if needed
+        addToast("Merge failed: " + mergeError.message, "error");
         setLoading(false);
         return;
       } else {
-        addToast("Data merged successfully! 🎉", "success");
+        addToast("Data merged! 🎉", "success");
       }
     } else if (choice === 'discard') {
-      addToast("Welcome back! Guest data discarded.", "info");
+      addToast("Guest data discarded.", "info");
     }
 
-    setAuthPassword(""); // Security: Clear password
+    setAuthPassword("");
     setShowConflictResolution(false);
     setIsAuthModalOpen(false);
     setLoading(false);
@@ -436,12 +358,10 @@ export default function App() {
       addToast("Logout failed: " + error.message, "error");
     } else {
       setBirthdays([]);
-      addToast("Logged out! Using as Guest.", "info");
+      addToast("Logged out!", "info");
     }
     setLoading(false);
   };
-
-  // Enriched birthdays logic
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-bg-color">
@@ -451,7 +371,6 @@ export default function App() {
 
   return (
     <div className="max-w-2xl mx-auto px-2 sm:px-4 py-8 space-y-8">
-      {/* Header */}
       <header className="text-center space-y-2">
         <motion.h1 
           initial={{ opacity: 0, y: -20 }}
@@ -463,7 +382,6 @@ export default function App() {
         <p className="text-sm sm:text-base text-text-muted">Stay connected with your loved ones</p>
       </header>
 
-      {/* Stats/Reminder Card */}
       <AnimatePresence>
         {enrichedBirthdays.some(b => b.isToday) && (
           <motion.div 
@@ -483,7 +401,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Main Actions */}
       <div className="flex items-center justify-between gap-2 overflow-hidden">
         <h2 className="text-base sm:text-xl font-semibold flex items-center gap-2 truncate">
           <Cake className="w-5 h-5 text-primary shrink-0" />
@@ -500,7 +417,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* Birthday List */}
       <div className="grid gap-4">
         {enrichedBirthdays.map((b) => (
           <motion.div 
@@ -544,7 +460,6 @@ export default function App() {
         )}
       </div>
 
-      {/* Calendar Section */}
       <CalendarSection 
         month={month}
         year={year}
@@ -556,7 +471,6 @@ export default function App() {
         birthdays={birthdays}
       />
 
-      {/* Add Modal */}
       <AnimatePresence>
         {isAdding && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

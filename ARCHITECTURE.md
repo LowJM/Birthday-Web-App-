@@ -7,7 +7,7 @@ This document outlines the technical design of the Birthday App, focusing on the
 - **Frontend**: React 19 + TypeScript + Vite
 - **Styling**: Tailwind CSS + Framer Motion (Animations) + Lucide (Icons)
 - **Backend / Sync**: Supabase (Auth + PostgreSQL)
-- **Mobile Foundation**: Capacitor (Android + Native APIs)
+- **Mobile Runtime**: Android WebView + WorkManager (Background Notifications)
 
 ---
 
@@ -29,19 +29,47 @@ When a guest decides to "Link" their account, the logic handles several states t
    - If the guest has saved birthdays, the user is prompted to **Merge** or **Discard**.
    - **Merge Logic**: The app signs in to the existing account, maps the temporary guest data to the new user ID, and batch-inserts it into the `birthdays` table before clearing the local state.
 
-### 3. Native Deep Link Handling
-To confirm email updates and account linking on mobile devices, the app utilizes Capacitor's `App` plugin to handle custom URL schemes (`com.birthdayapp://confirm`).
-- **Parsing**: The app listens for `appUrlOpen` events, parses the `access_token` and `refresh_token` from the URL fragments, and calls `supabase.auth.setSession()` to complete the handshake.
+### 3. Deep Link Handling
+To confirm email updates and account linking on mobile devices, the app handles custom URL schemes (`com.birthdayapp://confirm`) via Android's intent filter system.
+- **Parsing**: The Android `MainActivity` can intercept deep link intents, parse the `access_token` and `refresh_token` from the URL fragments, and pass them to the WebView for `supabase.auth.setSession()` to complete the handshake.
 
 ---
 
-## 📅 Notification Synchronization
+## 📱 Mobile Architecture (Android WebView)
 
-To maintain high efficiency, notification scheduling is hashed and throttled.
+The app runs as a **React web app inside an Android WebView** — no Capacitor or hybrid framework is used.
 
-- **Deduplication**: A `lastScheduledHash` (using `useRef`) stores a JSON hash of all birthdays and their next dates. Scheduling only triggers if the hash deviates.
-- **Mobile Constraints**: Since mobile OSs limit the number of future notifications, the app schedules the nearest **50** upcoming birthdays.
-- **Native Bridge**: Uses `@capacitor/local-notifications` to interface with system-level alarms.
+### How It Works
+1. **Vite builds** the React app into static HTML/JS/CSS (`npm run build`)
+2. The **dist output** is copied to `android/app/src/main/assets/public/`
+3. `MainActivity` creates a WebView and loads `file:///android_asset/public/index.html`
+4. The WebView has JavaScript, DOM storage, and file access enabled
+5. The app theme transitions from the splash screen to the WebView on `onCreate()`
+
+### Key Design Decisions
+- **Relative asset paths**: `vite.config.ts` sets `base: './'` so built paths resolve correctly under the `file://` protocol
+- **No Capacitor bridge**: All native features (notifications, boot recovery) are handled directly in Java via WorkManager
+- **localStorage for auth**: Supabase auth tokens are persisted via `localStorage` (accessible in the WebView)
+
+---
+
+## 🔔 Notification System (WorkManager)
+
+Background birthday notifications are handled entirely by Android's **WorkManager** — no Capacitor plugins required.
+
+### Components
+- **`NotificationService`**: Schedules a `PeriodicWorkRequest` for daily birthday checks
+- **`BirthdayNotificationWorker`**: Queries Supabase REST API directly via HTTP, filters for today's birthdays, and sends native notifications
+- **`NotificationHelper`**: Creates notification channels and builds notification UI
+- **`BootReceiver`**: Reschedules WorkManager tasks after device reboot
+
+### Key Properties
+- Runs every 24 hours, even with the app closed
+- Survives device reboots via `BOOT_COMPLETED` broadcast
+- Battery-aware scheduling (respects doze mode)
+- Daily deduplication via `SharedPreferences` to prevent duplicate notifications
+
+---
 
 ## 🧮 Birthday Calculation Engine
 

@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { Preferences } from '@capacitor/preferences'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -8,14 +7,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: {
       async getItem(key) {
-        const { value } = await Preferences.get({ key });
-        return value;
+        return localStorage.getItem(key);
       },
       async setItem(key, value) {
-        await Preferences.set({ key, value });
+        localStorage.setItem(key, value);
       },
       async removeItem(key) {
-        await Preferences.remove({ key });
+        localStorage.removeItem(key);
       },
     },
     autoRefreshToken: true,
