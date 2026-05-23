@@ -1,6 +1,12 @@
 package com.lowjm.birthdayapp;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -11,11 +17,23 @@ import android.net.Uri;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
-import androidx.activity.OnBackPressedCallback;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "BirthdayApp";
     private WebView webView;
+    
+    // Modern permission launcher for notification permission (Android 13+)
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    Log.d(TAG, "Notification permission GRANTED");
+                } else {
+                    Log.w(TAG, "Notification permission DENIED by user");
+                }
+                // Schedule WorkManager regardless — it will queue notifications
+                // and they'll appear once permission is granted
+                scheduleWorker();
+            });
     
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -27,11 +45,19 @@ public class MainActivity extends AppCompatActivity {
         Window window = getWindow();
         window.setBackgroundDrawable(null);
         
-        // Initialize WorkManager for birthday notifications
-        try {
-            NotificationService.scheduleNotificationCheck(this);
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to schedule notifications: " + e.getMessage());
+        // Request notification permission (Android 13+) or schedule directly
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "Requesting POST_NOTIFICATIONS permission...");
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            } else {
+                Log.d(TAG, "Notification permission already granted");
+                scheduleWorker();
+            }
+        } else {
+            // Android 12 and below: no runtime permission needed
+            Log.d(TAG, "Android < 13: no notification permission needed");
+            scheduleWorker();
         }
         
         // Load React web app in WebView
@@ -114,6 +140,22 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+    
+    /**
+     * Schedule the WorkManager periodic check and also fire an immediate one-time check.
+     * The immediate check ensures users get a notification right after installing/opening the app
+     * if today is someone's birthday.
+     */
+    private void scheduleWorker() {
+        try {
+            NotificationService.scheduleNotificationCheck(this);
+            // Also fire an immediate one-time check so the user doesn't have to wait 24h
+            NotificationService.triggerImmediateCheck(this);
+            Log.d(TAG, "WorkManager scheduled + immediate check triggered");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to schedule notifications: " + e.getMessage());
+        }
     }
     
     @Override

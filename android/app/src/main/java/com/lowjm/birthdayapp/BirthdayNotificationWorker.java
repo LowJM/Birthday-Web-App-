@@ -10,6 +10,7 @@ import android.content.SharedPreferences;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
@@ -18,10 +19,10 @@ import java.util.Locale;
 import java.util.Scanner;
 
 /**
- * Background worker that checks for birthdays daily and sends notifications
- * This worker is triggered by WorkManager according to the schedule defined in NotificationService
+ * Background worker that checks for birthdays daily and sends notifications.
  * 
- * It queries Supabase REST API to get birthdays for today and sends notifications for matches.
+ * Uses a Supabase RPC function (get_todays_birthdays) that runs with SECURITY DEFINER
+ * so it bypasses RLS — the anon key has no user session in a background worker.
  */
 public class BirthdayNotificationWorker extends Worker {
     
@@ -39,78 +40,76 @@ public class BirthdayNotificationWorker extends Worker {
         try {
             Context context = getApplicationContext();
             
-            // Get today's date
             Calendar today = Calendar.getInstance();
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
             String todayDate = sdf.format(today.getTime());
             
-            // Check if we've already sent notifications today
+            android.util.Log.d(TAG, "=== Birthday check starting for date: " + todayDate + " ===");
+            
+            // OneTimeWorkRequests (immediate checks) bypass deduplication
+            boolean isImmediateCheck = getInputData().getBoolean("immediate_check", false);
+            
             SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             String lastCheckDate = prefs.getString(KEY_LAST_CHECK, "");
             
-            if (todayDate.equals(lastCheckDate)) {
-                // Already checked today, no need to check again
-                android.util.Log.d(TAG, "Already checked birthdays today");
+            if (!isImmediateCheck && todayDate.equals(lastCheckDate)) {
+                android.util.Log.d(TAG, "Already checked birthdays today (periodic), skipping");
                 return Result.success();
             }
             
-            // Update last check date
             prefs.edit().putString(KEY_LAST_CHECK, todayDate).apply();
             
-            // Query Supabase for birthdays matching today
             queryAndNotifyBirthdays(context, todayDate);
             
+            android.util.Log.d(TAG, "=== Birthday check completed ===");
             return Result.success();
             
         } catch (Exception e) {
-            // Log the error
             android.util.Log.e(TAG, "Error checking birthdays", e);
-            
-            // Retry the task
             return Result.retry();
         }
     }
     
     /**
-     * Query Supabase for birthdays matching today's month and day
-     * Then send notifications for each match
+     * Call the Supabase RPC function to get today's birthdays, then send notifications.
      */
     private void queryAndNotifyBirthdays(Context context, String todayDate) {
         try {
-            // Extract month and day from today's date (YYYY-MM-DD)
-            String[] parts = todayDate.split("-");
-            String month = parts[1];  // MM
-            String day = parts[2];    // DD
-            
-            // Get Supabase credentials from BuildConfig (you'll need to add these)
             String supabaseUrl = BuildConfig.SUPABASE_URL;
             String supabaseKey = BuildConfig.SUPABASE_ANON_KEY;
             
-            if (supabaseUrl == null || supabaseKey == null) {
-                android.util.Log.w(TAG, "Supabase credentials not configured");
+            android.util.Log.d(TAG, "SUPABASE_URL length: " + (supabaseUrl != null ? supabaseUrl.length() : "null"));
+            android.util.Log.d(TAG, "SUPABASE_ANON_KEY length: " + (supabaseKey != null ? supabaseKey.length() : "null"));
+            
+            if (supabaseUrl == null || supabaseUrl.isEmpty() || supabaseKey == null || supabaseKey.isEmpty()) {
+                android.util.Log.e(TAG, "ERROR: Supabase credentials not configured!");
+                sendDebugNotification(context, "Birthday App: Supabase credentials not configured. Please rebuild with env vars set.");
                 return;
             }
             
-            // Build the query to get all birthdays
-            // We fetch all and filter locally because SQL LIKE on dates is complex
-            String query = String.format("%s/rest/v1/birthdays?select=id,name,birth_date", supabaseUrl);
+            // Call the RPC function instead of querying the table directly.
+            // This bypasses RLS since the function uses SECURITY DEFINER.
+            String rpcUrl = supabaseUrl + "/rest/v1/rpc/get_todays_birthdays";
+            android.util.Log.d(TAG, "Calling Supabase RPC: " + rpcUrl);
             
-            // Fetch birthdays from Supabase
-            JSONArray birthdays = fetchBirthdaysFromSupabase(query, supabaseKey);
+            JSONArray birthdays = callSupabaseRpc(rpcUrl, supabaseKey);
             
             if (birthdays != null) {
-                // Filter for today's birthdays and send notifications
+                android.util.Log.d(TAG, "RPC returned " + birthdays.length() + " birthday(s) for today");
+                
                 for (int i = 0; i < birthdays.length(); i++) {
                     JSONObject birthday = birthdays.getJSONObject(i);
-                    String birthDate = birthday.getString("birth_date"); // Format: YYYY-MM-DD
                     String name = birthday.getString("name");
                     
-                    // Check if this birthday matches today (compare month and day only)
-                    if (isBirthdayToday(birthDate, month, day)) {
-                        sendBirthdayNotification(context, name);
-                        android.util.Log.d(TAG, "Sent notification for " + name);
-                    }
+                    sendBirthdayNotification(context, name);
+                    android.util.Log.d(TAG, ">> Sent notification for: " + name);
                 }
+                
+                if (birthdays.length() == 0) {
+                    android.util.Log.d(TAG, "No birthdays today");
+                }
+            } else {
+                android.util.Log.w(TAG, "Supabase RPC returned null");
             }
             
         } catch (Exception e) {
@@ -119,30 +118,40 @@ public class BirthdayNotificationWorker extends Worker {
     }
     
     /**
-     * Fetch birthdays from Supabase REST API
+     * Call a Supabase RPC (POST) endpoint and return the JSON array result.
      */
-    private JSONArray fetchBirthdaysFromSupabase(String urlString, String apiKey) throws Exception {
+    private JSONArray callSupabaseRpc(String urlString, String apiKey) throws Exception {
         URL url = new URL(urlString);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         
         try {
-            // Set request headers
-            connection.setRequestMethod("GET");
+            connection.setRequestMethod("POST");
             connection.setRequestProperty("apikey", apiKey);
             connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-            connection.setConnectTimeout(10000); // 10 seconds
-            connection.setReadTimeout(10000);
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setDoOutput(true);
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
             
-            // Execute request
+            // RPC with empty body (function takes no arguments)
+            OutputStream os = connection.getOutputStream();
+            os.write("{}".getBytes("UTF-8"));
+            os.close();
+            
             int responseCode = connection.getResponseCode();
-            android.util.Log.d(TAG, "Supabase API response code: " + responseCode);
+            android.util.Log.d(TAG, "Supabase RPC response code: " + responseCode);
             
             if (responseCode == HttpURLConnection.HTTP_OK) {
-                // Read response
                 String response = readInputStream(connection.getInputStream());
+                android.util.Log.d(TAG, "RPC response: " + response.substring(0, Math.min(response.length(), 500)));
                 return new JSONArray(response);
             } else {
-                android.util.Log.w(TAG, "Supabase API returned status: " + responseCode);
+                try {
+                    String errorBody = readInputStream(connection.getErrorStream());
+                    android.util.Log.e(TAG, "Supabase RPC error: HTTP " + responseCode + " - " + errorBody);
+                } catch (Exception e) {
+                    android.util.Log.e(TAG, "Supabase RPC returned status: " + responseCode);
+                }
                 return null;
             }
             
@@ -151,50 +160,35 @@ public class BirthdayNotificationWorker extends Worker {
         }
     }
     
-    /**
-     * Read input stream to string
-     */
     private String readInputStream(InputStream inputStream) throws Exception {
         Scanner scanner = new Scanner(inputStream).useDelimiter("\\A");
         return scanner.hasNext() ? scanner.next() : "";
     }
     
-    /**
-     * Check if the given birth_date matches today's month and day
-     * 
-     * @param birthDate Format: YYYY-MM-DD
-     * @param todayMonth Format: MM (01-12)
-     * @param todayDay Format: DD (01-31)
-     * @return true if month and day match
-     */
-    private boolean isBirthdayToday(String birthDate, String todayMonth, String todayDay) {
-        try {
-            String[] parts = birthDate.split("-");
-            if (parts.length >= 3) {
-                String birthMonth = parts[1]; // MM
-                String birthDay = parts[2];   // DD
-                
-                return birthMonth.equals(todayMonth) && birthDay.equals(todayDay);
-            }
-        } catch (Exception e) {
-            android.util.Log.e(TAG, "Error parsing birth date: " + birthDate, e);
-        }
-        return false;
-    }
-    
-    /**
-     * Helper method to send a notification for a specific person
-     */
     private void sendBirthdayNotification(Context context, String name) {
         NotificationHelper.createNotificationChannel(context);
         
         NotificationCompat.Builder notificationBuilder = NotificationHelper.buildBirthdayNotification(context, name);
-        
-        // Generate a unique notification ID based on the name
         int notificationId = name.hashCode();
         
-        NotificationManager notificationManager = 
-                context.getSystemService(NotificationManager.class);
+        NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
         notificationManager.notify(notificationId, notificationBuilder.build());
+        
+        android.util.Log.d(TAG, "Notification posted with ID " + notificationId + " for " + name);
+    }
+    
+    private void sendDebugNotification(Context context, String message) {
+        NotificationHelper.createNotificationChannel(context);
+        
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, NotificationHelper.CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setContentTitle("Birthday App - Setup Required")
+                .setContentText(message)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true);
+        
+        NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
+        notificationManager.notify(999999, builder.build());
     }
 }

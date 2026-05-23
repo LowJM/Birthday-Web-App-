@@ -68,16 +68,22 @@ public class NotificationService {
     }
     
     /**
-     * Trigger an immediate check (useful for testing or forcing a check right now)
+     * Trigger an immediate check (useful for testing or forcing a check right now).
+     * This bypasses the daily deduplication check.
      */
     public static void triggerImmediateCheck(Context context) {
         try {
+            androidx.work.Data inputData = new androidx.work.Data.Builder()
+                    .putBoolean("immediate_check", true)
+                    .build();
+            
             androidx.work.OneTimeWorkRequest immediateRequest = 
                     new androidx.work.OneTimeWorkRequest.Builder(BirthdayNotificationWorker.class)
+                            .setInputData(inputData)
                             .build();
             
             WorkManager.getInstance(context).enqueue(immediateRequest);
-            android.util.Log.d("NotificationService", "Immediate birthday check triggered");
+            android.util.Log.d("NotificationService", "Immediate birthday check triggered (bypasses dedup)");
             
         } catch (Exception e) {
             android.util.Log.e("NotificationService", "Failed to trigger immediate check", e);
