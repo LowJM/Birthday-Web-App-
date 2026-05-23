@@ -2,35 +2,37 @@ package com.lowjm.birthdayapp;
 
 import android.content.Context;
 import androidx.work.Constraints;
+import androidx.work.NetworkType;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
+import java.util.Calendar;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Service to manage WorkManager scheduling for birthday notifications
- * Handles scheduling and cancellation of background tasks
+ * Service to manage WorkManager scheduling for birthday notifications.
+ * Schedules a daily background check that queries Supabase and sends notifications.
  */
 public class NotificationService {
     
     private static final String WORK_TAG = "birthday_notification_work";
-    private static final long CHECK_INTERVAL_HOURS = 24; // Check daily
+    private static final long CHECK_INTERVAL_HOURS = 24;
     
     /**
-     * Schedule daily birthday check
-     * This will check for birthdays every day
+     * Schedule daily birthday check.
+     * Uses KEEP policy so reopening the app does NOT reset the 24h timer.
+     * Only creates a new schedule if one doesn't already exist.
      */
     public static void scheduleNotificationCheck(Context context) {
         try {
-            // Create constraints for the work
-            // The work will only run when:
-            // - Device has network connectivity
-            // - Device battery is not critically low
+            // Only require network (need internet for Supabase query)
             Constraints constraints = new Constraints.Builder()
-                    .setRequiresBatteryNotLow(true)
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build();
             
-            // Create periodic work request to run every 24 hours
+            // Calculate delay to target ~1:00 AM
+            long initialDelayMinutes = calculateDelayTo1AM();
+            
             PeriodicWorkRequest birthdayCheckRequest =
                     new PeriodicWorkRequest.Builder(
                             BirthdayNotificationWorker.class,
@@ -38,17 +40,19 @@ public class NotificationService {
                             TimeUnit.HOURS
                     )
                     .setConstraints(constraints)
+                    .setInitialDelay(initialDelayMinutes, TimeUnit.MINUTES)
                     .addTag(WORK_TAG)
                     .build();
             
-            // Schedule the work with REPLACE policy to avoid duplicate work
+            // KEEP = don't replace existing schedule, only create if none exists
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                     WORK_TAG,
-                    ExistingPeriodicWorkPolicy.REPLACE,
+                    ExistingPeriodicWorkPolicy.KEEP,
                     birthdayCheckRequest
             );
             
-            android.util.Log.d("NotificationService", "Birthday check scheduled successfully");
+            android.util.Log.d("NotificationService", 
+                "Birthday check scheduled (KEEP policy). Initial delay: " + initialDelayMinutes + " minutes (~1 AM)");
             
         } catch (Exception e) {
             android.util.Log.e("NotificationService", "Failed to schedule birthday check", e);
@@ -56,7 +60,26 @@ public class NotificationService {
     }
     
     /**
-     * Cancel all scheduled birthday notification checks
+     * Calculate minutes until next 1:00 AM.
+     */
+    private static long calculateDelayTo1AM() {
+        Calendar now = Calendar.getInstance();
+        Calendar target = Calendar.getInstance();
+        target.set(Calendar.HOUR_OF_DAY, 1);
+        target.set(Calendar.MINUTE, 0);
+        target.set(Calendar.SECOND, 0);
+        
+        // If 1 AM already passed today, schedule for tomorrow
+        if (now.after(target)) {
+            target.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        
+        long diffMs = target.getTimeInMillis() - now.getTimeInMillis();
+        return diffMs / (60 * 1000);
+    }
+    
+    /**
+     * Cancel all scheduled birthday notification checks.
      */
     public static void cancelNotificationCheck(Context context) {
         try {
@@ -68,8 +91,8 @@ public class NotificationService {
     }
     
     /**
-     * Trigger an immediate check (useful for testing or forcing a check right now).
-     * This bypasses the daily deduplication check.
+     * Trigger an immediate one-time check (bypasses deduplication).
+     * Used on app open so user gets instant notification if birthday today.
      */
     public static void triggerImmediateCheck(Context context) {
         try {
