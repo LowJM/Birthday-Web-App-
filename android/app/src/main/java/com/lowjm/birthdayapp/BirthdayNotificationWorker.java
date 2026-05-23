@@ -52,6 +52,13 @@ public class BirthdayNotificationWorker extends Worker {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             String lastCheckDate = prefs.getString(KEY_LAST_CHECK, "");
             
+            // Check if user is logged in (synced from React app)
+            String currentUserId = prefs.getString("current_user_id", null);
+            if (currentUserId == null) {
+                android.util.Log.d(TAG, "No user logged in, skipping background check");
+                return Result.success();
+            }
+            
             if (!isImmediateCheck && todayDate.equals(lastCheckDate)) {
                 android.util.Log.d(TAG, "Already checked birthdays today (periodic), skipping");
                 return Result.success();
@@ -59,7 +66,7 @@ public class BirthdayNotificationWorker extends Worker {
             
             prefs.edit().putString(KEY_LAST_CHECK, todayDate).apply();
             
-            queryAndNotifyBirthdays(context, todayDate);
+            queryAndNotifyBirthdays(context, todayDate, currentUserId);
             
             android.util.Log.d(TAG, "=== Birthday check completed ===");
             return Result.success();
@@ -73,7 +80,7 @@ public class BirthdayNotificationWorker extends Worker {
     /**
      * Call the Supabase RPC function to get today's birthdays, then send notifications.
      */
-    private void queryAndNotifyBirthdays(Context context, String todayDate) {
+    private void queryAndNotifyBirthdays(Context context, String todayDate, String userId) {
         try {
             String supabaseUrl = BuildConfig.SUPABASE_URL;
             String supabaseKey = BuildConfig.SUPABASE_ANON_KEY;
@@ -90,9 +97,9 @@ public class BirthdayNotificationWorker extends Worker {
             // Call the RPC function instead of querying the table directly.
             // This bypasses RLS since the function uses SECURITY DEFINER.
             String rpcUrl = supabaseUrl + "/rest/v1/rpc/get_todays_birthdays";
-            android.util.Log.d(TAG, "Calling Supabase RPC: " + rpcUrl);
+            android.util.Log.d(TAG, "Calling Supabase RPC: " + rpcUrl + " for user: " + userId);
             
-            JSONArray birthdays = callSupabaseRpc(rpcUrl, supabaseKey);
+            JSONArray birthdays = callSupabaseRpc(rpcUrl, supabaseKey, userId);
             
             if (birthdays != null) {
                 android.util.Log.d(TAG, "RPC returned " + birthdays.length() + " birthday(s) for today");
@@ -120,7 +127,7 @@ public class BirthdayNotificationWorker extends Worker {
     /**
      * Call a Supabase RPC (POST) endpoint and return the JSON array result.
      */
-    private JSONArray callSupabaseRpc(String urlString, String apiKey) throws Exception {
+    private JSONArray callSupabaseRpc(String urlString, String apiKey, String userId) throws Exception {
         URL url = new URL(urlString);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         
@@ -133,9 +140,10 @@ public class BirthdayNotificationWorker extends Worker {
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(15000);
             
-            // RPC with empty body (function takes no arguments)
+            // RPC with user_id parameter
+            String jsonBody = "{\"p_user_id\": \"" + userId + "\"}";
             OutputStream os = connection.getOutputStream();
-            os.write("{}".getBytes("UTF-8"));
+            os.write(jsonBody.getBytes("UTF-8"));
             os.close();
             
             int responseCode = connection.getResponseCode();

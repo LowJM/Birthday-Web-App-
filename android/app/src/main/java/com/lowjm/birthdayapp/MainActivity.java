@@ -5,6 +5,8 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import android.Manifest;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -126,6 +128,8 @@ public class MainActivity extends AppCompatActivity {
         String url = "file:///android_asset/public/index.html";
         Log.d(TAG, "Loading WebView URL: " + url);
         webView.loadUrl(url);
+        // Setup Javascript Interface for auth state sync
+        webView.addJavascriptInterface(new WebAppInterface(this), "Android");
         
         setContentView(webView);
         
@@ -155,6 +159,31 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "WorkManager scheduled + immediate check triggered");
         } catch (Exception e) {
             Log.e(TAG, "Failed to schedule notifications: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Interface to receive data from the React app (WebView)
+     */
+    public class WebAppInterface {
+        Context mContext;
+
+        WebAppInterface(Context c) {
+            mContext = c;
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setUserId(String userId) {
+            SharedPreferences prefs = mContext.getSharedPreferences("birthday_app_prefs", Context.MODE_PRIVATE);
+            prefs.edit().putString("current_user_id", userId).apply();
+            Log.d(TAG, "React sent user_id: " + userId);
+        }
+
+        @android.webkit.JavascriptInterface
+        public void clearUserId() {
+            SharedPreferences prefs = mContext.getSharedPreferences("birthday_app_prefs", Context.MODE_PRIVATE);
+            prefs.edit().remove("current_user_id").apply();
+            Log.d(TAG, "React cleared user_id");
         }
     }
     

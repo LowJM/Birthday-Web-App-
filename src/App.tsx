@@ -1,5 +1,14 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase, type Birthday } from "./lib/supabase";
+
+declare global {
+  interface Window {
+    Android?: {
+      setUserId: (userId: string) => void;
+      clearUserId: () => void;
+    };
+  }
+}
 import Toast, { type ToastMessage } from "./components/Toast";
 import { 
   Plus, 
@@ -50,13 +59,17 @@ export default function App() {
           await supabase.auth.signOut();
         } else {
           setUser(user);
+          window.Android?.setUserId(user.id);
           setLoading(false);
           return;
         }
       }
 
       const { data } = await supabase.auth.signInAnonymously();
-      if (data.user) setUser(data.user);
+      if (data.user) {
+        setUser(data.user);
+        window.Android?.setUserId(data.user.id);
+      }
       setLoading(false);
     };
 
@@ -64,6 +77,11 @@ export default function App() {
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        window.Android?.setUserId(session.user.id);
+      } else {
+        window.Android?.clearUserId();
+      }
       
       if (event === 'PASSWORD_RECOVERY') {
         setAuthMode("update_password");
@@ -72,7 +90,10 @@ export default function App() {
 
       if (!session) {
         const { data } = await supabase.auth.signInAnonymously();
-        if (data.user) setUser(data.user);
+        if (data.user) {
+          setUser(data.user);
+          window.Android?.setUserId(data.user.id);
+        }
       }
     });
 
