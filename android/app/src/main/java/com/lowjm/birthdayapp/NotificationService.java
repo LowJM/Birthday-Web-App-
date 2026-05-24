@@ -112,4 +112,27 @@ public class NotificationService {
             android.util.Log.e("NotificationService", "Failed to trigger immediate check", e);
         }
     }
+
+    /**
+     * Trigger a background check queued by the AlarmManager.
+     * Uses network constraints so WorkManager will wait if Battery Saver blocks network.
+     */
+    public static void triggerBackgroundCheck(Context context) {
+        try {
+            Constraints constraints = new Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build();
+
+            androidx.work.OneTimeWorkRequest bgRequest = 
+                    new androidx.work.OneTimeWorkRequest.Builder(BirthdayNotificationWorker.class)
+                            .setConstraints(constraints)
+                            .build(); // immediate_check is false by default, so it uses deduplication
+            
+            WorkManager.getInstance(context).enqueue(bgRequest);
+            android.util.Log.d("NotificationService", "Background birthday check queued to WorkManager");
+            
+        } catch (Exception e) {
+            android.util.Log.e("NotificationService", "Failed to queue background check", e);
+        }
+    }
 }
