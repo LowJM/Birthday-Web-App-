@@ -41,7 +41,7 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Boot receiver to reschedule notifications on device restart -->
+        <!-- Boot receiver to reschedule alarm on device restart -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true">
@@ -49,6 +49,11 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Alarm receiver for exact 1:00 AM daily birthday check -->
+        <receiver
+            android:name=".BirthdayAlarmReceiver"
+            android:exported="false" />
 
     </application>
 

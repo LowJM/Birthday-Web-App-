@@ -147,16 +147,21 @@ public class MainActivity extends AppCompatActivity {
     }
     
     /**
-     * Schedule the WorkManager periodic check and also fire an immediate one-time check.
-     * The immediate check ensures users get a notification right after installing/opening the app
-     * if today is someone's birthday.
+     * Schedule the daily AlarmManager alarm at 1:00 AM and fire an immediate check.
+     * 
+     * AlarmManager = exact daily trigger at 1 AM (fires even when app is killed)
+     * WorkManager  = one-time immediate check (fires right now when user opens app)
      */
     private void scheduleWorker() {
         try {
-            NotificationService.scheduleNotificationCheck(this);
-            // Also fire an immediate one-time check so the user doesn't have to wait 24h
+            // Schedule exact daily alarm at 1:00 AM via AlarmManager
+            BirthdayAlarmReceiver.scheduleNextAlarm(this);
+            
+            // Also fire an immediate one-time check via WorkManager
+            // so user gets instant notification if today is someone's birthday
             NotificationService.triggerImmediateCheck(this);
-            Log.d(TAG, "WorkManager scheduled + immediate check triggered");
+            
+            Log.d(TAG, "AlarmManager scheduled for 1AM + immediate WorkManager check triggered");
         } catch (Exception e) {
             Log.e(TAG, "Failed to schedule notifications: " + e.getMessage());
         }
