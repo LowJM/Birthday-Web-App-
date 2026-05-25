@@ -6,6 +6,7 @@ declare global {
     Android?: {
       setUserId: (userId: string) => void;
       clearUserId: () => void;
+      getFcmToken: () => string;
     };
   }
 }
@@ -138,7 +139,30 @@ export default function App() {
         .from("birthdays")
         .select("*")
         .order("birth_date", { ascending: true });
-      if (data) setBirthdays(data);
+      if (data) {
+          setBirthdays(data);
+      }
+      
+      // Save FCM token to database (retry if not immediately available)
+      if (window.Android && window.Android.getFcmToken) {
+          let attempts = 0;
+          const tryGetToken = async () => {
+              if (!window.Android) return;
+              const token = window.Android.getFcmToken();
+              if (token) {
+                  console.log("Got FCM Token, saving to Supabase...");
+                  await supabase.from('fcm_tokens').upsert({
+                      user_id: user.id,
+                      token: token,
+                      updated_at: new Date().toISOString()
+                  });
+              } else if (attempts < 10) {
+                  attempts++;
+                  setTimeout(tryGetToken, 1000); // Try again in 1 second
+              }
+          };
+          tryGetToken();
+      }
     };
 
     fetchBirthdays();

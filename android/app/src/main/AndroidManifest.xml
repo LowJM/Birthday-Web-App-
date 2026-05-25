@@ -41,29 +41,19 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Boot receiver to reschedule alarm on device restart -->
-        <receiver
-            android:name=".BootReceiver"
+
+        <!-- Firebase Messaging Service -->
+        <service
+            android:name=".MyFirebaseMessagingService"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
-        </receiver>
-
-        <!-- Alarm receiver for exact 1:00 AM daily birthday check -->
-        <receiver
-            android:name=".BirthdayAlarmReceiver"
-            android:exported="false" />
+        </service>
 
     </application>
 
     <!-- Permissions -->
-
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- WorkManager requires INTERNET permission (already added above) -->
 </manifest>

@@ -20,6 +20,8 @@ import android.util.Log;
 import android.view.View;
 import android.view.Window;
 
+import com.google.firebase.messaging.FirebaseMessaging;
+
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "BirthdayApp";
     private WebView webView;
@@ -32,9 +34,6 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     Log.w(TAG, "Notification permission DENIED by user");
                 }
-                // Schedule WorkManager regardless — it will queue notifications
-                // and they'll appear once permission is granted
-                scheduleWorker();
             });
     
     @Override
@@ -47,20 +46,24 @@ public class MainActivity extends AppCompatActivity {
         Window window = getWindow();
         window.setBackgroundDrawable(null);
         
-        // Request notification permission (Android 13+) or schedule directly
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                Log.d(TAG, "Requesting POST_NOTIFICATIONS permission...");
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
-            } else {
-                Log.d(TAG, "Notification permission already granted");
-                scheduleWorker();
             }
-        } else {
-            // Android 12 and below: no runtime permission needed
-            Log.d(TAG, "Android < 13: no notification permission needed");
-            scheduleWorker();
         }
+        
+        // Fetch FCM token explicitly on startup to ensure we have it
+        FirebaseMessaging.getInstance().getToken()
+            .addOnCompleteListener(task -> {
+                if (!task.isSuccessful()) {
+                    Log.w(TAG, "Fetching FCM registration token failed", task.getException());
+                    return;
+                }
+                String token = task.getResult();
+                Log.d(TAG, "FCM Token obtained on startup: " + token);
+                SharedPreferences prefs = getSharedPreferences("birthday_app_prefs", Context.MODE_PRIVATE);
+                prefs.edit().putString("fcm_token", token).apply();
+            });
         
         // Load React web app in WebView
         webView = new WebView(this);
@@ -146,26 +149,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     
-    /**
-     * Schedule the daily AlarmManager alarm at 1:00 AM and fire an immediate check.
-     * 
-     * AlarmManager = exact daily trigger at 1 AM (fires even when app is killed)
-     * WorkManager  = one-time immediate check (fires right now when user opens app)
-     */
-    private void scheduleWorker() {
-        try {
-            // Schedule exact daily alarm at 1:00 AM via AlarmManager
-            BirthdayAlarmReceiver.scheduleNextAlarm(this);
-            
-            // Also fire an immediate one-time check via WorkManager
-            // so user gets instant notification if today is someone's birthday
-            NotificationService.triggerImmediateCheck(this);
-            
-            Log.d(TAG, "AlarmManager scheduled for 1AM + immediate WorkManager check triggered");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to schedule notifications: " + e.getMessage());
-        }
-    }
+    // Old background worker removed in favor of Native Calendar Sync
     
     /**
      * Interface to receive data from the React app (WebView)
@@ -190,7 +174,17 @@ public class MainActivity extends AppCompatActivity {
             prefs.edit().remove("current_user_id").apply();
             Log.d(TAG, "React cleared user_id");
         }
+
+        @android.webkit.JavascriptInterface
+        public String getFcmToken() {
+            SharedPreferences prefs = mContext.getSharedPreferences("birthday_app_prefs", Context.MODE_PRIVATE);
+            String token = prefs.getString("fcm_token", null);
+            Log.d(TAG, "React requested FCM token, returning: " + token);
+            return token;
+        }
     }
+    
+
     
     @Override
     protected void onDestroy() {

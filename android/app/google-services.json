@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "818297026178",
+    "project_id": "birthday-app-f3833",
+    "storage_bucket": "birthday-app-f3833.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:818297026178:android:bc90a7c7a60702279c669b",
+        "android_client_info": {
+          "package_name": "com.lowjm.birthdayapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCw_EHUrQeLsYE4v0pVVLM56ldG8s079gg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
