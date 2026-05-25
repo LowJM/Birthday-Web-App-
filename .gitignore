@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 *-firebase-adminsdk-*.json
+
+android/app/google-services.json
+
+*-firebase-adminsdk-*.json
