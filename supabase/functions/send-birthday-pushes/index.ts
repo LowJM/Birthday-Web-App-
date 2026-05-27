@@ -12,24 +12,21 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // 1. Get today's month and day (in UTC)
-    const today = new Date()
-    // You can adjust timezone logic here if necessary. For now, we use UTC month/day.
-    const month = today.getUTCMonth() + 1
-    const day = today.getUTCDate()
+    // 1. Get today's month and day (in Malaysia Time, UTC+8)
+    const now = new Date()
+    // Add 8 hours for UTC+8
+    const myTime = new Date(now.getTime() + (8 * 60 * 60 * 1000))
+    const month = myTime.getUTCMonth() + 1
+    const day = myTime.getUTCDate()
     
     // Format to match birth_date "-MM-DD"
     const monthStr = month.toString().padStart(2, '0')
     const dayStr = day.toString().padStart(2, '0')
-    const searchString = `-${monthStr}-${dayStr}`
+    console.log(`Checking for birthdays on month ${month}, day ${day}`)
 
-    console.log(`Checking for birthdays ending with: ${searchString}`)
-
-    // 2. Fetch all birthdays for today
+    // 2. Fetch all birthdays for today using RPC
     const { data: birthdays, error: bError } = await supabase
-      .from('birthdays')
-      .select('*, user_id')
-      .like('birth_date', `%${searchString}`)
+      .rpc('get_todays_birthdays', { target_month: month, target_day: day })
 
     if (bError) throw bError
     
@@ -75,12 +72,13 @@ serve(async (req) => {
       const payload = {
         message: {
           token: token,
-          notification: {
-            title: `It's ${b.person_name}'s Birthday! \uD83C\uDF82`,
-            body: `Don't forget to wish them a happy birthday today!`
-          },
           data: {
-            birthday_id: b.id
+            title: `It's ${b.name}'s Birthday! \uD83C\uDF82`,
+            body: `Don't forget to wish them a happy birthday today!`,
+            birthday_id: b.id.toString()
+          },
+          android: {
+            priority: "high"
           }
         }
       }
@@ -95,7 +93,7 @@ serve(async (req) => {
       })
 
       const resData = await response.json()
-      results.push({ user: b.user_id, name: b.person_name, success: response.ok, response: resData })
+      results.push({ user: b.user_id, name: b.name, success: response.ok, response: resData })
     }
 
     return new Response(JSON.stringify({ message: "Pushes processed", results }), { headers: { "Content-Type": "application/json" } })

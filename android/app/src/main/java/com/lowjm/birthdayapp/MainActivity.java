@@ -65,6 +65,20 @@ public class MainActivity extends AppCompatActivity {
                 prefs.edit().putString("fcm_token", token).apply();
             });
         
+        // Create Notification Channel for Android 8.0+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                "birthday_channel",
+                "Birthday Notifications",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Reminders for upcoming birthdays");
+            android.app.NotificationManager manager = getSystemService(android.app.NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+        
         // Load React web app in WebView
         webView = new WebView(this);
         webView.setBackgroundColor(0xFF000000); // Prevent white flash
